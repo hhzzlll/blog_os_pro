@@ -76,19 +76,6 @@ impl Shell {
                         self.redraw_line();
                     }
                 }
-                KeyCode::Backspace => {
-                    if self.cursor_position > 0 {
-                        self.input_buffer.remove(self.cursor_position - 1);
-                        self.cursor_position -= 1;
-                        self.redraw_line();
-                    }
-                }
-                KeyCode::Delete => {
-                    if self.cursor_position < self.input_buffer.len() {
-                        self.input_buffer.remove(self.cursor_position);
-                        self.redraw_line();
-                    }
-                }
                 _ => {}
             },
             DecodedKey::Unicode(c) => match c {
@@ -101,6 +88,21 @@ impl Shell {
                     self.input_buffer.clear();
                     self.cursor_position = 0;
                     print!("{}", self.prompt);
+                }
+                '\x08' => {
+                    // 处理退格键
+                    if self.cursor_position > 0 {
+                        self.input_buffer.remove(self.cursor_position - 1);
+                        self.cursor_position -= 1;
+                        self.redraw_line();
+                    }
+                }
+                '\x7F' => {
+                    // 处理删除键
+                    if self.cursor_position < self.input_buffer.len() {
+                        self.input_buffer.remove(self.cursor_position);
+                        self.redraw_line();
+                    }
                 }
                 _ => {
                     self.input_buffer.insert(self.cursor_position, c);
@@ -225,6 +227,7 @@ impl Shell {
                 if let Ok(size) = args[1].parse::<usize>() {
                     unsafe {
                         let layout = Layout::from_size_align(size, 8).unwrap();
+                        println!("Allocating {} bytes...", size);
                         let ptr = ALLOCATOR.alloc(layout);
                         if !ptr.is_null() {
                             println!("Allocated {} bytes at: {:p}", size, ptr);
@@ -237,17 +240,21 @@ impl Shell {
                 }
             }
             "dealloc" => {
-                if args.len() != 2 {
-                    println!("Usage: mem dealloc <ptr>");
+                if args.len() != 3 {
+                    println!("Usage: mem dealloc <ptr> <size>");
                     return;
                 }
 
                 if let Ok(ptr_val) = usize::from_str_radix(args[1].trim_start_matches("0x"), 16) {
                     unsafe {
                         let ptr = ptr_val as *mut u8;
-                        let layout = Layout::from_size_align(8, 8).unwrap();
-                        ALLOCATOR.dealloc(ptr, layout);
-                        println!("Deallocated memory at: {:p}", ptr);
+                        if let Ok(size) = args[2].parse::<usize>() {
+                            let layout = Layout::from_size_align(size, 8).unwrap();
+                            ALLOCATOR.dealloc(ptr, layout);
+                            println!("Deallocated memory at: {:p}", ptr);
+                        } else {
+                            println!("Invalid size: {}", args[2]);
+                        }
                     }
                 } else {
                     println!("Invalid pointer: {}", args[1]);
